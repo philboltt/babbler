@@ -1,1 +1,3 @@
 Flask==0.10.1
+pyOSC==0.3.5b-5294
+watson-developer-cloud==0.25.2
