@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import hashlib
 from flask import Flask, jsonify, request
 
 import json
@@ -32,10 +33,16 @@ voices = []
 for voice in text_to_speech.voices()["voices"]:
     voices.append({"name":voice["name"],"description":voice["description"]})
 
-import OSC
+# OSX
+#import OSC
+#c = OSC.OSCClient()
+#c.connect(('127.0.0.1', 8001))
 
-c = OSC.OSCClient()
-c.connect(('127.0.0.1', 8001))
+# Windows
+from pythonosc import osc_message_builder
+from pythonosc import udp_client
+
+client = udp_client.SimpleUDPClient("127.0.0.1", 8000)
 
 @app.route('/')
 def Welcome():
@@ -64,17 +71,30 @@ def SayHello(name):
 @app.route('/api/speak', methods=["POST"]) 
 def GenerateWav():
     result = request.get_json()
-    print "Attempting to convert '%s' to speech using voice '%s'"%(result['text'], result['voice'])
-    with open(join('/Users/philboltt/src/babbler/static', 'output.wav'),'wb') as audio_file:
+    print("Attempting to convert '%s' to speech using voice '%s'"%(result['text'], result['voice']))
+
+    stringToHash = "%s_%s"%(result['text'], result['voice'])
+    hash_object = hashlib.md5(stringToHash.encode())
+    filename = "%s.wav"%hash_object.hexdigest()
+    filepath = join('D:\\workspace\\babbler\\static', filename)
+    with open( filepath,'wb') as audio_file:
         audio_file.write(text_to_speech.synthesize(result["text"], accept='audio/wav', voice=result["voice"]))
-    print "Audio file written to disk"
+    print("Audio file written to disk: %s"%filepath)
 
-    oscmsg = OSC.OSCMessage()
-    oscmsg.setAddress("/speak/url")
-    oscmsg.append('http://127.0.0.1/static/output.wav')
-    c.send(oscmsg)
+    # OSX version using pyOSC
+    #oscmsg = OSC.OSCMessage()
+    #oscmsg.setAddress("/speak/url")
+    #oscmsg.append('http://127.0.0.1/static/%s'%filename)
+    #c.send(oscmsg)
 
-    print "OSC message dispatched"
+    #Windows
+
+    msgBuilder = osc_message_builder.OscMessageBuilder("/speak/url")
+    msgBuilder.add_arg('file://D:/workspace/babbler/static/%s'%filename, osc_message_builder.OscMessageBuilder.ARG_TYPE_STRING)
+    msg = msgBuilder.build()
+    print(msg.params)
+    client.send(msg)
+    print("OSC message dispatched: /speak/url file://D:/workspace/babbler/static/%s"%filename)
 
     return json.dumps({'success':True}), 200, {'ContentType':'application/json'}
 
